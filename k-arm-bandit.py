@@ -1,55 +1,71 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import random
+import pandas as pd
 
-# define the number of arms and actual rewards
-k = 10
-r = 2000
-
-# define a list of length k to store the true value q*(a) of each action according to a normal distribution w/ mean 0 and unit variance
-q_star = np.random.normal(0, 1, k)
-
-# generate actual rewards for each action w/ mean q*(a), unit variance, normal distribution
-rewards=[]
-for a in range(0, k):
-    rewards.append(np.random.normal(q_star[a], 1, r))
+# define Arm class
+class Arm:
+    def __init__(self):
+        self.q_star = np.random.normal(0, 1)
+        self.samples = []
+        
+    def gen_samples(self, sample_size=2000):
+        self.samples = [np.random.normal(self.q_star, 1, self.sample_size)]
+      
+# define k-arm bandit class as an iterable  
+class k_arm_bandit:
+    def __init__(self, k=10):
+        self.k = k
+        self.arms = [Arm() for i in range(self.k)]
+        self.current_index = 0 # current index for iteration
+        
+    def __iter__(self):
+        return self
     
-# visualize actual rewards as a violin plot
-plt.violinplot(rewards)
-plt.show()
+    def __next__(self):
+        if self.current_index >= self.k:
+            self.current_index = 0 # Reset index for future iterations
+            raise StopIteration
+        arm = self.arms[self.current_index]
+        self.current_index += 1
+        return arm
 
-# Evaluate performance of greedy and epsilon-greedy methods for different values of epsilon
-
-epsilon = [0, 0.01, 0.1, 0.5, 1]
-steps = 1000
-runs = 2000
-
-# assume initial action-value estimates are zero
-q_estimate = np.zeros(k)
-
-# single run
-# generate a list of random numbers between 0 and 1 
-choice = []
-choice.append(random.sample(range((0,1),1000)))
-
-avg_reward = []
-avg_reward.append(0)
-
-for i in range(0, steps):
-    if choice[i] < epsilon:
-        a = random.randint(0, k-1) # explore
-    else:
-        a = np.argmax(q_estimate) # exploit
+class testbed:
+    def __init__(self, epsilon = [0, 0.01, 0.1, 1], k=10, sample_size=2000):
+        self.epsilon = epsilon
+        zeroes = [0]*len(epsilon)
+       
+        self.df = pd.DataFrame({'epsilon': epsilon, 'total_reward': zeroes, 'steps': zeroes, 'avg_reward': zeroes})
+        
+        self.k = k
+        self.sample_size = sample_size
+        
+        self.bandit = k_arm_bandit(self.k)
+        self.current_index = 0 # current index for iteration
     
-    # update action-value estimates
-    q_estimate[a] = q_estimate[a] + (1/(i+1))*(rewards[a][i] - q_estimate[a])
+    def __iter__(self):
+        return self
     
-    # update avg-reward
-    avg_reward = avg_reward + rewards[a][i]
+    def __next__(self):
+        if self.current_index >= len(self.epsilon):
+            self.current_index = 0  # Reset index for future iterations
+            raise StopIteration
+        eps = self.epsilon[self.current_index]
+        self.current_index += 1
+        return eps 
+ 
+tb = testbed()
+
+# for each epsilon, perform a run
+
+
+# test
+for eps in tb:
+    print(eps)
     
-    # (1/(i+1))*(rewards[a][i] - avg_reward)
-
-
-
+for arm in tb.bandit:
+    print(arm.q_star)
+    print(arm.samples)
+    
+print(tb.df)
 
 
