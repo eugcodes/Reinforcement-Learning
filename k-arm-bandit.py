@@ -4,12 +4,16 @@ import pandas as pd
 
 # define Arm class
 class Arm:
-    def __init__(self):
-        self.q_star = np.random.normal(0, 1)
+    def __init__(self, *args):
+        if len(args) == 1:
+            self.q_star = args[0]
+        else:
+            self.q_star = np.random.normal(0, 1)
         self.samples = []
-        
+    
     def gen_samples(self, sample_size=2000):
-        self.samples = [np.random.normal(self.q_star, 1, self.sample_size)]
+        self.samples = np.random.normal(self.q_star, 1,sample_size)
+        return self.samples
       
 # define k-arm bandit class as an iterable  
 class k_arm_bandit:
@@ -30,8 +34,16 @@ class k_arm_bandit:
         self.current_index += 1
         return arm
 
+class agent:
+    def __init__(self, k=10):
+        self.k = k
+        # assume initial q_star estimates are 0
+        self.q_star_estimates = [0]*k
+
 class testbed:
-    def __init__(self, epsilon = [0.0, 0.01, 0.1, 1.0], k=10, run_size=2000):
+    def __init__(self, agent_class, k=10, epsilon = [0.0, 0.01, 0.5, 1.0], run_size=2000):
+        self.agent = agent_class(k)
+        
         self.epsilon = epsilon
         zeroes = [0]*len(epsilon)
        
@@ -53,8 +65,9 @@ class testbed:
         eps = self.epsilon[self.current_index]
         self.current_index += 1
         return eps 
- 
-tb = testbed()
+
+
+tb = testbed(agent,5)
 
 # for each epsilon, perform a run of run_size
 
@@ -71,21 +84,55 @@ tb = testbed()
     
 print(tb.dfs)
 
+run_df = pd.DataFrame(columns = ['Run', 'Random value', 'Explore?', 'Arm', 'Reward', 'Total_Reward', 'Avg Reward'])
+    
 # Choose first run randomly
-run_df = pd.DataFrame({
-    'Run': range(1, tb.run_size + 1), 
-    'Random value': [0] + list(np.random.uniform(0, 1, tb.run_size-1))
-})
+initial_arm = np.random.randint(0, tb.k - 1)
+initial_reward = tb.bandit.arms[initial_arm].gen_samples(1)[0]
+rewards_dict = {
+    'Run': 1,
+    'Random value': 0,
+    'Explore?': True,
+    'Arm': initial_arm, 
+    'Reward': initial_reward, 
+    'Total_Reward': initial_reward, 
+    'Avg Reward': initial_reward}
 
-run_df['Explore?'] = (run_df['Random value'] < tb.epsilon[2]).astype(int) 
+run_df = pd.concat([run_df, pd.DataFrame(rewards_dict, index=[0])], ignore_index=True)
 
-'''
-run_df['Arm'] = np.random.randint(0, tb.k - 1, tb.run_size)
+arm_set = set(range(tb.k))
 
-'''
+for i in range(2, tb.run_size + 1):
+    random_value = np.random.uniform(0, 1)
+    explore = (random_value < tb.epsilon[2])
+    if explore:
+        # exclude greedy arm from exploration
+        excluded_arm = np.argmax([arm.q_star for arm in tb.bandit])
+        avail_arms = list(arm_set - set([excluded_arm]))
+        arm = np.random.choice(avail_arms)
+    else:
+        arm = np.argmax([arm.q_star for arm in tb.bandit])
+    reward = tb.bandit.arms[arm].gen_samples(1)[0]
+    
+    # update q_star estimate
+    total_reward = rewards_dict['Total_Reward'] + reward
+    avg_reward = total_reward / i
+    rewards_dict = {
+        'Run': i,
+        'Random value': random_value,
+        'Explore?': explore,
+        'Arm': arm, 
+        'Reward': reward, 
+        'Total_Reward': total_reward, 
+        'Avg Reward': avg_reward}
+    
+    run_df = pd.concat([run_df, pd.DataFrame(rewards_dict, index=[0])], ignore_index=True)
+    
+
+print(initial_reward)
 print(run_df)
-# do a single run: choose arm, calculate reward, update q_star for selected arm
-
-
-
+print(arm_set)
+print(excluded_arm)
+print(avail_arms)
+print(arm)
 
