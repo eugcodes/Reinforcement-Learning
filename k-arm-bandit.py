@@ -10,17 +10,28 @@ class Arm:
         else:
             self.q_star = np.random.normal(0, 1)
         self.samples = []
+        self.current_index = 0 # current index for iteration
     
-    def gen_samples(self, sample_size=2000):
-        self.samples = np.random.normal(self.q_star, 1,sample_size)
-        return self.samples
+    def sample(self, sample_size=1):
+        self.samples = np.random.normal(self.q_star, 1, sample_size)
+        if sample_size == 1:
+            return self.samples[0]
+        else:
+            return self.samples
+     
+    def __next__(self):
+        if self.current_index >= len(self.samples):
+            self.current_index = 0 # Reset index for future iterations
+            raise StopIteration
+        sample = self.samples[self.current_index]
+        self.current_index += 1
+        return sample
       
-# define k-arm bandit class as an iterable  
-class k_arm_bandit:
+# define k-arm bandit class 
+class KArmBandit:
     def __init__(self, k=10):
         self.k = k
         self.arms = [Arm() for i in range(self.k)]
-        
         self.current_index = 0 # current index for iteration
         
     def __iter__(self):
@@ -34,105 +45,98 @@ class k_arm_bandit:
         self.current_index += 1
         return arm
 
-class agent:
-    def __init__(self, k=10):
+class Agent:
+    def __init__(self, k=10, epsilon=0.1, runs=1, run_size=1000):
         self.k = k
-        # assume initial q_star estimates are 0
-        self.q_star_estimates = [0]*k
-
-class testbed:
-    def __init__(self, agent_class, k=10, epsilon = [0.0, 0.01, 0.5, 1.0], run_size=2000):
-        self.agent = agent_class(k)
-        
         self.epsilon = epsilon
-        zeroes = [0]*len(epsilon)
-       
-        self.dfs = {'epsilon:' + str(ep) : pd.DataFrame(columns = ['Run', 'Arm', 'Reward', 'Total_Reward', 'Avg Reward']) for ep in epsilon}
-        
-        self.k = k
+        self.runs = runs
         self.run_size = run_size
-        
-        self.bandit = k_arm_bandit(self.k)
+        self.explore_flag = None
+        self.first_run = True
+
+        # assume initial q_star estimates are 0
+        self.q_star_estimates = [{'arm': i, 'q_star': 0, 'Total Reward': 0, 'n': 0} for i in range(self.k)]
+        self.avail_arms = set(range(self.k))
+
+        # create a list of data frames, each for a run
+        #self.run_data = [pd.DataFrame(columns = ['Step', 'Reward', 'Total_Reward', 'Avg Reward'])] * self.runs
+        self.run_data = pd.DataFrame(columns = ['Step', 'Arm', 'Reward', 'Total_Reward', 'Avg Reward'] +['Q_star estimate' + str(arm) for arm in range(self.k)])
+
         self.current_index = 0 # current index for iteration
-    
+            
     def __iter__(self):
         return self
     
     def __next__(self):
-        if self.current_index >= len(self.epsilon):
-            self.current_index = 0  # Reset index for future iterations
+        if self.current_index >= self.runs:
+            self.current_index = 0
             raise StopIteration
-        eps = self.epsilon[self.current_index]
+        run_data = self.run_data[self.current_index]
         self.current_index += 1
-        return eps 
-
-
-tb = testbed(agent,5)
-
-# for each epsilon, perform a run of run_size
-
-# Run # | Explore | Arm | Reward | Total reward | Avg Reward
-
-
-# test
-# for eps in tb:
-#     print(eps)
+        return run_data
     
-# for arm in tb.bandit:
-#    print(arm.q_star)
-#    print(arm.samples)
+    def choose_arm(self):
+        if self.first_run == True: # first run
+            self.explore_flag = True
+            self.first_run = False
+            selected_arm = np.random.choice(range(self.k)) # choose a random arm
+        elif (np.random.uniform(0, 1) < self.epsilon): # Explore if epsilon-greedy condition is met
+            self.explore_flag = True
+            selected_arm = np.random.choice(range(self.k))  # choose a random arm
+        else: #Exploit
+            self.explore_flag = False
+            selected_arm = np.argmax([self.q_star_estimates[i]['q_star'] for i in range(self.k)])
+        return selected_arm
     
-print(tb.dfs)
-
-run_df = pd.DataFrame(columns = ['Run', 'Random value', 'Explore?', 'Arm', 'Reward', 'Total_Reward', 'Avg Reward'])
+    def update_q_star_estimate(self, arm, reward):
+        self.q_star_estimates[arm]['n'] += 1
+        self.q_star_estimates[arm]['Total Reward'] += reward
+        self.q_star_estimates[arm]['q_star'] = self.q_star_estimates[arm]['Total Reward'] / self.q_star_estimates[arm]['n']
+        return self.q_star_estimates[arm]['q_star']
     
-# Choose first run randomly
-initial_arm = np.random.randint(0, tb.k - 1)
-initial_reward = tb.bandit.arms[initial_arm].gen_samples(1)[0]
-rewards_dict = {
-    'Run': 1,
-    'Random value': 0,
-    'Explore?': True,
-    'Arm': initial_arm, 
-    'Reward': initial_reward, 
-    'Total_Reward': initial_reward, 
-    'Avg Reward': initial_reward}
-
-run_df = pd.concat([run_df, pd.DataFrame(rewards_dict, index=[0])], ignore_index=True)
-
-arm_set = set(range(tb.k))
-
-for i in range(2, tb.run_size + 1):
-    random_value = np.random.uniform(0, 1)
-    explore = (random_value < tb.epsilon[2])
-    if explore:
-        # exclude greedy arm from exploration
-        excluded_arm = np.argmax([arm.q_star for arm in tb.bandit])
-        avail_arms = list(arm_set - set([excluded_arm]))
-        arm = np.random.choice(avail_arms)
-    else:
-        arm = np.argmax([arm.q_star for arm in tb.bandit])
-    reward = tb.bandit.arms[arm].gen_samples(1)[0]
+    def run(self, environment): 
+        total_reward = 0
+        # remaining runs based on epsilon-greedy selection method
+        for i in range(self.run_size):
+            action = self.choose_arm()
+            reward = environment.arms[action].sample()
+            total_reward += reward
+            self.update_q_star_estimate(action, reward)
+            # update run_data
+            rewards_dict = {
+                'Step': i+1,
+                'Arm': action,
+                'Reward': reward,   
+                'Total_Reward': total_reward, 
+                'Avg Reward': total_reward / (i+1)} | {
+                'Q_star estimate' + str(arm) : self.q_star_estimates[arm]['q_star'] for arm in range(self.k)
+                }
+            self.run_data.loc[i] = [i, action, reward, total_reward, total_reward / (i+1)] + [ self.q_star_estimates[arm]['q_star'] for arm in range(self.k)]
+        
+        self.first_run = True # reset first_run flag for next run
+        self.greedy_arm = -1 # reset greedy_arm for next run
+        
+        return self.run_data
     
-    # update q_star estimate
-    total_reward = rewards_dict['Total_Reward'] + reward
-    avg_reward = total_reward / i
-    rewards_dict = {
-        'Run': i,
-        'Random value': random_value,
-        'Explore?': explore,
-        'Arm': arm, 
-        'Reward': reward, 
-        'Total_Reward': total_reward, 
-        'Avg Reward': avg_reward}
-    
-    run_df = pd.concat([run_df, pd.DataFrame(rewards_dict, index=[0])], ignore_index=True)
-    
+# Create the TestBed and an Agent
+n_arms = 10
+test_bed = KArmBandit(n_arms)
+agent = Agent(n_arms, 0.1, 1, 2000) # later, create 4 agents with 4 epsilons
 
-print(initial_reward)
-print(run_df)
-print(arm_set)
-print(excluded_arm)
-print(avail_arms)
-print(arm)
+#print(agent.run(test_bed).head(500))
+print(agent.run(test_bed))
 
+true_q =[]
+for arm in test_bed:
+    true_q.append(arm.q_star)
+
+est_q = []
+for arm in range(n_arms):
+    est_q.append(agent.q_star_estimates[arm]['q_star'])
+
+print(true_q) 
+print(est_q)
+print(np.array(true_q) - np.array(est_q))
+
+#for i in agent:
+#    agent.run(test_bed)
