@@ -43,12 +43,11 @@ class KArmBandit:
         return arm
 
 class Agent:
-    def __init__(self, k=10, epsilon=0.1, runs=1, run_size=1000):
+    def __init__(self, k=10, epsilon=0.1, run_size=1000):
         self.k = k
         self.epsilon = epsilon
-        self.runs = runs
         self.run_size = run_size
-        self.first_run_iteration = True
+        self.first_step = True
 
         # assume initial q_star estimates are 0
         self.model = pd.DataFrame({
@@ -60,8 +59,8 @@ class Agent:
     
     def choose_arm(self):
         # Explore if first run iteration or epsilon-greedy condition is met
-        if self.first_run_iteration or (np.random.uniform(0, 1) < self.epsilon): 
-            self.first_run_iteration = False
+        if self.first_step or (np.random.uniform(0, 1) < self.epsilon): 
+            self.first_step = False
             return np.random.randint(self.k) 
         # Else Exploit
         else: 
@@ -90,24 +89,62 @@ class Agent:
         columns = ['Step', 'Arm', 'Reward', 'Total_Reward', 'Avg Reward'] + ['Q_star estimate' + str(_) for _ in range(self.k)]
         self.run_data = pd.DataFrame(run_results, columns=columns)
         
-        self.first_run_iteration = True # reset first_run_iteration flag for next run
+        self.first_step = True # reset first_step flag for next run
         
         return self.run_data
     
 # Create the TestBed and an Agent
 n_arms = 10
 test_bed = KArmBandit(n_arms)
-agent = Agent(n_arms, 0.1, 1, 100000) # later, create 4 agents with 4 epsilons
+agent = Agent(n_arms, 0.1, 1000) 
+runs = 200
 
-#print(agent.run(test_bed).head(500))
-print(agent.run(test_bed))
+# Run Agent in TestBed environment n times and average the results at each step
 
+exp_results = []
+for i in range(runs):
+    current_run = agent.run(test_bed)
+    exp_results.append(current_run) # array of df's
+    # print(current_run)
+
+# Average the Rewards at each step
+exp_results = np.array(exp_results)
+avg_rewards = np.mean(exp_results[:, :, 4], axis=0) # average of avg rewards at each step
+
+# print(avg_rewards)
+# print(len(avg_rewards))
+
+# Plot average rewards at each step
+plt.plot(avg_rewards)
+plt.xlabel('Steps')
+plt.ylabel('Average Reward')
+plt.title('Average Reward vs Steps')
+plt.show()
+
+
+cols = ['Step', 'Total_Reward', 'Avg Reward']
+#exp_results = pd.DataFrame(________, columns=cols)
+
+""" r1 = agent.run(test_bed)
 true_q = [arm.q_star for arm in test_bed.arms]
 est_q = list(agent.model['q_star'])
 
+print(r1)
 print(true_q) 
 print(est_q)
 print(np.array(true_q) - np.array(est_q))
 
-#for i in agent:
-#    agent.run(test_bed)
+
+r2 = agent.run(test_bed)
+
+# print(agent.run(test_bed))
+
+true_q = [arm.q_star for arm in test_bed.arms]
+est_q = list(agent.model['q_star'])
+
+print(r2)
+print(true_q) 
+print(est_q)
+print(np.array(true_q) - np.array(est_q))
+ """
+
