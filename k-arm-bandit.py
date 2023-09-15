@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-# import pandas as pd
 import time
 
 # define Arm class
@@ -70,27 +69,22 @@ class Agent:
         self.q_star[arm] = self.total_reward[arm] / self.n[arm]
 
     def run(self, environment): 
-        total_rewards = np.zeros(self.run_size)
+        # Reset model for each run
+        self.q_star = np.zeros(self.k)
+        self.total_reward = np.zeros(self.k)
+        self.n = np.zeros(self.k, dtype=int)
+        
+        run_rewards = np.zeros(self.run_size)
         self.first_step = True # reset first_step flag for each run
         
         for i in range(self.run_size):
             chosen_arm = self.choose_arm()
             reward = environment.arms[chosen_arm].sample()
             self.update_model(chosen_arm, reward)
+            run_rewards[i] = reward
             
-            # update run_data
-            #row_data = [i+1, action, reward, total_reward, total_reward / (i+1)] + list(self.model['q_star'])
-            #run_results.append(row_data)
-            
-            # only produce an array of average reward at each step to optimize performance
-            total_rewards[i] = reward
-            
-        return np.cumsum(total_rewards) / (np.arange(1, self.run_size + 1)) # average reward at each step
-            
-        # columns = ['Step', 'Arm', 'Reward', 'Total_Reward', 'Avg Reward'] + ['Q_star estimate' + str(_) for _ in range(self.k)]
-        # self.run_data = pd.DataFrame(run_results, columns=columns)
-        
-        #return self.run_data
+        return run_rewards
+
 
 # Execute multiple runs of each Agent in the TestBed environment and average the results at each step
 n_arms = 10
@@ -107,74 +101,64 @@ start_time = time.time()
 # test_bed is an array of size runs of k-Arm Bandits 
 test_bed = [KArmBandit(n_arms) for _ in range(runs)]
 
-# For each epsilon agent, create 2-D arrays of avg rewards x runs, then average the runs to create a 1-D array of avg rewards
+# For each epsilon agent, create 2-D arrays of rewards x runs, then average the runs to create a 1-D array of avg rewards
 for agent in agents:
-    avg_rewards = np.zeros(steps) # initialize array of avg rewards for this epsilon agent
+    rewards = [] # initialize array of rewards for this epsilon agent
     
-    #for _ in range(runs):
     for bandits in test_bed:
-        avg_rewards += agent.run(bandits)  # sum of avg rewards across all runs for this epsilon agent
+        rewards.append(agent.run(bandits))  # rewards for each run for this epsilon agent
     
-    avg_rewards /= runs # average of avg rewards across all runs for this epsilon agent
+    avg_rewards = np.mean(rewards, axis=0) # average of avg rewards at each step
+    
     avg_rewards_dict['epilson = ' + str(agent.epsilon)] = avg_rewards # add to avg rewards table
     
 end_time = time.time()
 elapsed_time = end_time - start_time
 print (f"Elapsed time: {elapsed_time} seconds")
-        
-""" for 
-        current_run = agent.run(test_bed)
-        #current_run = [agent.epsilon]*agent.run_size # testing
-        exp_results.append(current_run) # array of arrays
 
-    # Average the Rewards at each step
-     """
-
-# Average the Rewards at each step
-#exp_results = np.array(exp_results)
-#avg_rewards = np.mean(exp_results[:, :, 4], axis=0) # average of avg rewards at each step
-""" 
-print(all_avg_rewards[0])
-print(all_avg_rewards[1])
-print(all_avg_rewards[2]) """
-
-# print(len(avg_rewards))
-
+plt.ion()
 # Plot average rewards at each step
-#for avg_rewards, epsilon in zip(all_avg_rewards, eps):
+plt.figure()
 for epsilon, avg_rewards in avg_rewards_dict.items():
     plt.plot(avg_rewards, label=f"ε={epsilon}")
-
-
 plt.xlabel('Steps')
 plt.ylabel('Average Reward')
 plt.title('Average Reward vs Steps')
 plt.legend()
-plt.show()
+plt.draw()
+plt.pause(0) 
+    
+'''
+# Violin plot Testbed Arms q_star
+testbed_q_stars = []
+for bandit in test_bed:
+    testbed_q_stars.append([arm.q_star for arm in bandit.arms])
+testbed_q_stars = np.array(testbed_q_stars)
 
-#cols = ['Step', 'Total_Reward', 'Avg Reward']
-#exp_results = pd.DataFrame(________, columns=cols)
- 
-""" r1 = agent.run(test_bed)
-true_q = [arm.q_star for arm in test_bed.arms]
-est_q = list(agent.model['q_star'])
+plt.figure()
+plt.violinplot(testbed_q_stars, showmeans=True)
+plt.xlabel('Arm')
+plt.ylabel('q_star')
+plt.title('Distribution of q_star values for each arm')
+plt.xticks(range(1, testbed_q_stars.shape[1] + 1))  # Set x-ticks to represent arm numbers
+plt.grid(True, axis='y')
+plt.draw()
+plt.pause(0) 
 
-print(r1)
-print(true_q) 
-print(est_q)
-print(np.array(true_q) - np.array(est_q))
+# Violin plot of 2000 samples for each arm in one instance of a bandit
+bandit_instance_samples = []
+for i in range(n_arms):
+    bandit_instance_samples.append(test_bed[0].arms[i].sample(2000)) 
+bandit_instance_samples = np.array(bandit_instance_samples).T
 
+plt.figure()
+plt.violinplot(bandit_instance_samples, showmeans=True)
+plt.xlabel('Arm')
+plt.ylabel('q_star')
+plt.title('Distribution of samples for each arm of an instance of a k-arm bandit')
+plt.xticks(range(1, n_arms + 1))  # Set x-ticks to represent arm numbers
 
-r2 = agent.run(test_bed)
-
-# print(agent.run(test_bed))
-
-true_q = [arm.q_star for arm in test_bed.arms]
-est_q = list(agent.model['q_star'])
-
-print(r2)
-print(true_q) 
-print(est_q)
-print(np.array(true_q) - np.array(est_q))
- """
-
+plt.grid(True, axis='y')
+plt.draw()
+plt.pause(0)
+'''
