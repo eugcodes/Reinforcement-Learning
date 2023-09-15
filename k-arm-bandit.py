@@ -65,8 +65,7 @@ class Agent:
     
     def update_model(self, arm, reward):
         self.n[arm] += 1
-        self.total_reward[arm] += reward
-        self.q_star[arm] = self.total_reward[arm] / self.n[arm]
+        self.q_star[arm] += (1/self.n[arm]) * (reward - self.q_star[arm])
 
     def run(self, environment): 
         # Reset model for each run
