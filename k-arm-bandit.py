@@ -84,11 +84,11 @@ class Agent:
             
         return run_rewards
 
-
+ 
 # Execute multiple runs of each Agent in the TestBed environment and average the results at each step
 n_arms = 10
-eps = [0, 0.01, 0.1]
-runs = 2000
+eps = [0, 0.01, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
+runs = 20000
 steps = 1000
 
 agents = [Agent(n_arms, epsilon, steps) for epsilon in eps]
